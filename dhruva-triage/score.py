@@ -1,3 +1,5 @@
+import re
+
 import config
 
 POINTS = {"match": 1, "partial": 0.5, "no-match": 0}
@@ -43,3 +45,31 @@ def recommend(fit, n_missing, term):
     if fit is None or n_missing > config.MAX_MISSING:
         return "INSUFFICIENT DATA TO RECOMMEND"
     return "ADVANCE TO CALL" if fit >= config.ADVANCE_AT else "PASS"
+
+
+def verify_citations(verdicts, app):
+    """Do not trust the model's quotes. Returns (verdicts, flags).
+    - 'form: field=value' citations are checked against the real form; a mismatch downgrades the
+      verdict to insufficient-data (the model cited something the form does not say).
+    - 'deck:' citations whose wording barely appears in the deck are only flagged, because
+      citations may legitimately paraphrase."""
+    out, flags = {}, []
+    deck = (app.get("deck") or "").lower()
+    for c, v in verdicts.items():
+        v = dict(v)
+        cit = v.get("citation") or ""
+        if v["verdict"] in POINTS:
+            for field, val in re.findall(r"form:\s*(\w+)\s*=\s*([^;]+)", cit):
+                if val.strip().lower() != str(app.get(field, "")).strip().lower():
+                    v = {"verdict": MISSING, "citation": None,
+                         "why": f"cited form {field}={val.strip()!r} does not match the form"}
+                    flags.append(f"{c}: form citation mismatch")
+                    break
+            else:
+                m = re.search(r"deck:\s*(.+?)(?:;\s*form:|$)", cit)
+                if m:
+                    words = [w for w in re.findall(r"[a-z0-9]{4,}", m.group(1).lower())]
+                    if words and sum(w in deck for w in words) / len(words) < 0.5:
+                        flags.append(f"{c}: deck citation not found in deck")
+        out[c] = v
+    return out, flags

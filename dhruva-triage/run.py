@@ -14,7 +14,7 @@ import score
 
 def triage(app):
     reply = llm.assess(app["id"], prompt.build(app))
-    verdicts = score.normalise(reply["criteria"])
+    verdicts, flags = score.verify_citations(score.normalise(reply["criteria"]), app)
     fit = score.fit_score(verdicts)
     gaps = score.missing(verdicts)
     term = guard.anti_thesis(app)
@@ -22,7 +22,8 @@ def triage(app):
     inr = cost.cost_inr(reply.get("tokens_in", 0), reply.get("tokens_out", 0))
     row = {"id": app["id"], "name": app["name"], "fit": fit, "rec": rec,
            "could_not_establish": gaps, "cost_inr": round(inr, 2),
-           "over_cost_ceiling": inr > config.COST_CEILING_INR}
+           "over_cost_ceiling": inr > config.COST_CEILING_INR,
+           "citation_flags": flags}
     return row, verdicts
 
 
@@ -36,7 +37,7 @@ def run(path):
         except Exception as e:                # one bad application must not stop the batch
             row, verdicts = {"id": app["id"], "name": app["name"], "fit": None,
                              "rec": f"ERROR: {type(e).__name__}: {e}", "could_not_establish": [],
-                             "cost_inr": 0.0, "over_cost_ceiling": False}, {}
+                             "cost_inr": 0.0, "over_cost_ceiling": False, "citation_flags": []}, {}
         rows.append(row)
         Path("reports", app["id"] + ".json").write_text(json.dumps({**row, "criteria": verdicts}, indent=1))
 
