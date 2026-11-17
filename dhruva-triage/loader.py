@@ -1,20 +1,21 @@
 import csv
 from pathlib import Path
 
+FIELDS = ["id", "name", "stage", "sector", "hq", "founders", "model", "round_size_cr"]
+
 
 def load(path="data/applications.csv"):
     apps = []
     with open(path, newline="") as f:
-        for row in csv.DictReader(f):
-            apps.append({
-                "id": row["id"],
-                "name": row["name"],
-                "stage": row["stage"],
-                "sector": row["sector"],
-                "hq": row["hq"],
-                "founders": row["founders"],
-                "model": row["model"],
-                "round_size_cr": row["round_size_cr"],
-                "deck": Path("decks", row["id"] + ".txt").read_text(),
-            })
+        reader = csv.DictReader(f)
+        # strip stray whitespace in headers (applications_v2.csv has 'round_size_cr ')
+        reader.fieldnames = [h.strip() for h in reader.fieldnames or []]
+        missing = [c for c in FIELDS if c not in reader.fieldnames]
+        if missing:
+            raise ValueError(f"{path} is missing columns: {', '.join(missing)}")
+        for row in reader:
+            app = {k: (row.get(k) or "").strip() for k in FIELDS}
+            deck = Path("decks", app["id"] + ".txt")
+            app["deck"] = deck.read_text() if deck.exists() else ""   # a missing deck is a data gap, not a crash
+            apps.append(app)
     return apps

@@ -6,8 +6,15 @@ Return JSON: pain_points (list of 2), subject, body."""
 
 
 def draft(domain, company, contact):
+    signals = company.get("compliance_signals") or []
+    if not signals:
+        # no specific hook = generic spam; don't write the email
+        raise ValueError("no compliance signals to use as a hook")
     p = PROMPT.format(
         name=contact["name"], title=contact["title"],
-        company=company["company"], signals=company["compliance_signals"],
+        company=company.get("company") or domain, signals=signals,
     )
-    return llm.ask("draft", domain, p)
+    mail = llm.ask("draft", domain, p)
+    if not mail.get("subject") or not mail.get("body"):
+        raise llm.LLMError("draft is missing subject or body")
+    return mail
