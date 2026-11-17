@@ -36,8 +36,9 @@ Return ONLY JSON in this shape:
 
 
 def _defang(text):
-    """Stop applicant text from closing our delimiter tags early."""
-    return text.replace("<untrusted_", "&lt;untrusted_").replace("</untrusted_", "&lt;/untrusted_")
+    """Escape every angle bracket in applicant text so it can never form or close one of our
+    delimiter tags, whatever the casing, spacing or slashes."""
+    return text.replace("<", "&lt;").replace(">", "&gt;")
 
 
 def build(app):
